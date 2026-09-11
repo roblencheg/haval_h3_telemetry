@@ -1,0 +1,14 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing credentials must never be committed.
+*.jks
+*.keystore
+keystore.properties
+.signing/

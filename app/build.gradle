@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+def h3KeystorePath = providers.gradleProperty('H3_KEYSTORE_PATH').orNull
+
+android {
+    namespace 'app.havalh3.telemetry'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'app.havalh3.telemetry'
+        minSdk 28
+        targetSdk 28
+        versionCode 6
+        versionName '1.2.1'
+    }
+
+    signingConfigs {
+        release {
+            if (h3KeystorePath != null) {
+                storeFile rootProject.file(h3KeystorePath)
+                storePassword providers.gradleProperty('H3_KEYSTORE_PASSWORD').get()
+                keyAlias providers.gradleProperty('H3_KEY_ALIAS').get()
+                keyPassword providers.gradleProperty('H3_KEY_PASSWORD').get()
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (h3KeystorePath != null) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        disable 'ExpiredTargetSdkVersion'
+    }
+}
