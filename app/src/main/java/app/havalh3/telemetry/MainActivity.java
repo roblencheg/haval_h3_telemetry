@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -74,6 +75,14 @@ public final class MainActivity extends Activity {
 
         addHeaderButton(header, "Показать", TelemetryService.ACTION_SHOW_CLUSTER);
         addHeaderButton(header, "Скрыть", TelemetryService.ACTION_HIDE_CLUSTER);
+        Button diagnostics = new Button(this);
+        diagnostics.setText("Диагностика");
+        diagnostics.setTextSize(14);
+        diagnostics.setOnClickListener(v ->
+                startActivity(new Intent(this, DiagnosticsActivity.class)));
+        LinearLayout.LayoutParams diagnosticsParams = new LinearLayout.LayoutParams(-2, dp(52));
+        diagnosticsParams.leftMargin = dp(5);
+        header.addView(diagnostics, diagnosticsParams);
         root.addView(header);
 
         status = text("", 14, Color.rgb(174, 181, 191), Typeface.NORMAL);
@@ -292,6 +301,12 @@ public final class MainActivity extends Activity {
 
     private void startTelemetry(String action) {
         startForegroundService(new Intent(this, TelemetryService.class).setAction(action));
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        DiagnosticsStore.recordKeyEvent(this, "MainActivity", event);
+        return super.dispatchKeyEvent(event);
     }
 
     private int dp(int value) {

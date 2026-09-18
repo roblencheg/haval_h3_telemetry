@@ -2,6 +2,7 @@ package app.havalh3.telemetry;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.UserManager;
 
 final class OverlaySettings {
     static final String FUEL = TelemetrySignals.FUEL_PERCENT;
@@ -126,7 +127,23 @@ final class OverlaySettings {
     }
 
     private static SharedPreferences prefs(Context context) {
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        Context storage = context.createDeviceProtectedStorageContext();
+        SharedPreferences devicePreferences =
+                storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (!devicePreferences.getBoolean("storage_migrated", false)) {
+            UserManager users = (UserManager) context.getSystemService(Context.USER_SERVICE);
+            boolean unlocked = users == null || users.isUserUnlocked();
+            if (unlocked) {
+                try {
+                    storage.moveSharedPreferencesFrom(context, PREFS);
+                } catch (Throwable ignored) {
+                    // Keep defaults if the old credential-protected file is unavailable.
+                }
+                storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                        .edit().putBoolean("storage_migrated", true).apply();
+            }
+        }
+        return storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
     private static SharedPreferences bootPrefs(Context context) {
