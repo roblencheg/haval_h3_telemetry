@@ -16,6 +16,7 @@ public final class BootReceiver extends BroadcastReceiver {
 
         boolean enabled = OverlaySettings.isAutoStartEnabled(context);
         Log.i(TAG, "Received " + action + ", autoStart=" + enabled);
+        DiagnosticsStore.record(context, "boot action=" + action + " autoStart=" + enabled);
         if (!enabled) return;
 
         Intent service = new Intent(context, TelemetryService.class)
@@ -35,6 +36,8 @@ public final class BootReceiver extends BroadcastReceiver {
         return Intent.ACTION_BOOT_COMPLETED.equals(action)
                 || Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action)
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)
-                || "android.intent.action.QUICKBOOT_POWERON".equals(action);
+                || "android.intent.action.QUICKBOOT_POWERON".equals(action)
+                || "com.htc.intent.action.QUICKBOOT_POWERON".equals(action)
+                || Intent.ACTION_REBOOT.equals(action);
     }
 }

@@ -27,7 +27,7 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     private static final String TAG = "H3TelemetryService";
     private static final String CHANNEL_ID = "h3_telemetry";
     private static final int NOTIFICATION_ID = 203;
-    private static final int MAX_CLUSTER_LAUNCH_ATTEMPTS = 24;
+    private static final int MAX_CLUSTER_LAUNCH_ATTEMPTS = 120;
     private static final long CLUSTER_RETRY_DELAY_MS = 5_000L;
     private GwmAdapterClient client;
     private Handler mainHandler;
@@ -62,6 +62,8 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? ACTION_START : intent.getAction();
+        DiagnosticsStore.record(this, "service start action=" + action
+                + " flags=" + flags + " startId=" + startId);
         if (ACTION_SHOW_CLUSTER.equals(action)) {
             requestClusterLaunch();
         } else if (ACTION_HIDE_CLUSTER.equals(action)) {
@@ -146,9 +148,13 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
             options.setLaunchDisplayId(target.getDisplayId());
             startActivity(activity, options.toBundle());
             Log.i(TAG, "Cluster activity launched on displayId=" + target.getDisplayId());
+            DiagnosticsStore.record(this,
+                    "cluster launched displayId=" + target.getDisplayId());
             return true;
         } catch (Throwable error) {
             Log.w(TAG, "Cluster is not ready, attempt=" + (clusterLaunchAttempts + 1), error);
+            DiagnosticsStore.record(this, "cluster launch failed attempt="
+                    + (clusterLaunchAttempts + 1) + " error=" + error);
             TelemetryStore.setConnected(TelemetryStore.isConnected(),
                     "Ошибка запуска приборки: " + error.getClass().getSimpleName());
             broadcastUpdate();

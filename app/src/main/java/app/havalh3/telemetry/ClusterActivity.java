@@ -11,6 +11,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -127,5 +128,11 @@ public final class ClusterActivity extends Activity {
             String value = TelemetryStore.displayText(signal);
             view.setText(value == null || value.isEmpty() ? "—" : value);
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        DiagnosticsStore.recordKeyEvent(this, "ClusterActivity", event);
+        return super.dispatchKeyEvent(event);
     }
 }
