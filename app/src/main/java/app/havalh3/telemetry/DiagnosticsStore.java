@@ -22,7 +22,7 @@ final class DiagnosticsStore {
         String deviceName = device == null ? "unknown" : device.getName();
         String line = timestamp()
                 + " origin=" + origin
-                + " action=" + KeyEvent.actionToString(event.getAction())
+                + " action=" + actionName(event.getAction())
                 + " keyCode=" + event.getKeyCode()
                 + "(" + KeyEvent.keyCodeToString(event.getKeyCode()) + ")"
                 + " scanCode=" + event.getScanCode()
@@ -30,7 +30,7 @@ final class DiagnosticsStore {
                 + " long=" + event.isLongPress()
                 + " deviceId=" + event.getDeviceId()
                 + " source=0x" + Integer.toHexString(event.getSource())
-                + " displayId=" + event.getDisplayId()
+                + " displayId=" + displayId(event)
                 + " device=" + deviceName;
         append(context, line);
     }
@@ -75,6 +75,22 @@ final class DiagnosticsStore {
 
     private static String timestamp() {
         return new SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(new Date());
+    }
+
+    private static String actionName(int action) {
+        if (action == KeyEvent.ACTION_DOWN) return "DOWN";
+        if (action == KeyEvent.ACTION_UP) return "UP";
+        if (action == KeyEvent.ACTION_MULTIPLE) return "MULTIPLE";
+        return String.valueOf(action);
+    }
+
+    private static String displayId(KeyEvent event) {
+        try {
+            Object value = event.getClass().getMethod("getDisplayId").invoke(event);
+            return String.valueOf(value);
+        } catch (Throwable ignored) {
+            return "unavailable";
+        }
     }
 
     private DiagnosticsStore() {
