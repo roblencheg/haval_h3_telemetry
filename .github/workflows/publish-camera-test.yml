@@ -1,0 +1,28 @@
+name: Publish camera test release
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.head_ref == 'publish-v1.4.0-camera-test'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify APK checksum
+        run: echo "e29b65e175f7d65cea83e2bafa35015495630b761d9231ba5dcf98996cf71db3  release-assets/H3Telemetry-v1.4.0-camera-test-release.apk" | sha256sum -c -
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.4.0-camera-test \
+            release-assets/H3Telemetry-v1.4.0-camera-test-release.apk \
+            --repo "${{ github.repository }}" \
+            --target main \
+            --title "H3 Telemetry 1.4.0 — тест камеры на приборке" \
+            --prerelease \
+            --notes "Экспериментальный полноэкранный вывод Camera2-потока на приборную панель по короткому нажатию дополнительной кнопки левого джойстика. Источник камеры 0/1/2 выбирается в приложении."
