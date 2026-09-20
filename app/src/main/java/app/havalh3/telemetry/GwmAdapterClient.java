@@ -119,7 +119,7 @@ final class GwmAdapterClient {
             try {
                 data.writeInterfaceToken(SERVICE_INTERFACE);
                 data.writeString(context.getPackageName());
-                data.writeStringArray(TelemetrySignals.ALL);
+                data.writeStringArray(TelemetrySignals.SUBSCRIPTIONS);
                 data.writeStrongBinder(listener);
                 if (!service.transact(3, data, reply, 0)) return -1;
                 int status = reply.dataAvail() >= 4 ? reply.readInt() : 0;

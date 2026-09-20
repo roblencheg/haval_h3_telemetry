@@ -12,6 +12,7 @@ import android.hardware.display.DisplayManager;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Display;
 
@@ -23,6 +24,7 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     static final String ACTION_HIDE_CLUSTER = "app.havalh3.telemetry.HIDE_CLUSTER";
     static final String ACTION_UPDATE = "app.havalh3.telemetry.UPDATE";
     static final String ACTION_SETTINGS_CHANGED = "app.havalh3.telemetry.SETTINGS_CHANGED";
+    static final String ACTION_CAMERA_CHANGED = "app.havalh3.telemetry.CAMERA_CHANGED";
 
     private static final String TAG = "H3TelemetryService";
     private static final String CHANNEL_ID = "h3_telemetry";
@@ -32,6 +34,7 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     private GwmAdapterClient client;
     private Handler mainHandler;
     private int clusterLaunchAttempts;
+    private long lastCameraKeyAt;
 
     private final Runnable clusterLaunchTask = new Runnable() {
         @Override
@@ -68,6 +71,8 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
             requestClusterLaunch();
         } else if (ACTION_HIDE_CLUSTER.equals(action)) {
             cancelClusterLaunch();
+            CameraState.setVisible(false);
+            sendLocalAction(ACTION_CAMERA_CHANGED);
             sendLocalAction(ACTION_HIDE_CLUSTER);
         } else if (intent == null && OverlaySettings.isAutoStartEnabled(this)) {
             requestClusterLaunch();
@@ -78,6 +83,7 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     @Override
     public void onDestroy() {
         cancelClusterLaunch();
+        CameraState.setVisible(false);
         if (client != null) client.stop();
         TelemetryStore.setConnected(false, "Сервис остановлен");
         super.onDestroy();
@@ -99,7 +105,27 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     @Override
     public void onValue(String key, String value) {
         TelemetryStore.put(key, value);
+        if (TelemetrySignals.SYSTEM_KEY_EVENT.equals(key)) {
+            handleSystemKeyEvent(value);
+        }
         broadcastUpdate();
+    }
+
+    private void handleSystemKeyEvent(String value) {
+        if (value == null || !"[1007,1]".equals(value.replace(" ", ""))) return;
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastCameraKeyAt < 500L) return;
+        lastCameraKeyAt = now;
+        boolean visible = CameraState.toggle();
+        DiagnosticsStore.record(this,
+                "steering camera key=1007 shortRelease cameraVisible=" + visible);
+        mainHandler.post(() -> {
+            if (visible) requestClusterLaunch();
+            sendLocalAction(ACTION_CAMERA_CHANGED);
+            if (visible) {
+                mainHandler.postDelayed(() -> sendLocalAction(ACTION_CAMERA_CHANGED), 750L);
+            }
+        });
     }
 
     private void broadcastUpdate() {
