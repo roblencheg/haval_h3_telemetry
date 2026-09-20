@@ -17,6 +17,8 @@ final class TelemetrySignals {
     static final String ENGINE_STATE = "car.basic.engine_state";
     static final String TPMS_STATUS = "car.basic.tpms_status";
     static final String TPMS_UNITS = "car.basic.tpms_units";
+    static final String SYSTEM_KEY_EVENT = "sys.other.keyevent_notify";
+    static final String AVM_PREVIEW_STATUS = "sys.avm.preview_status";
 
     static final String[] ALL = {
             FUEL_PERCENT,
@@ -35,6 +37,27 @@ final class TelemetrySignals {
             ENGINE_STATE,
             TPMS_STATUS,
             TPMS_UNITS
+    };
+
+    static final String[] SUBSCRIPTIONS = {
+            FUEL_PERCENT,
+            COOLANT_TEMP,
+            BATTERY_VOLTAGE,
+            MASTER_OIL_LEVEL,
+            EV_BATTERY_PERCENT,
+            ENGINE_OIL_NOTIFY,
+            INSIDE_TEMP,
+            BATTERY_POWER_LEVEL,
+            CURRENT_GEAR,
+            GEAR_STATUS,
+            AVG_FUEL,
+            JOURNEY_AVG_FUEL,
+            ODOMETER,
+            ENGINE_STATE,
+            TPMS_STATUS,
+            TPMS_UNITS,
+            SYSTEM_KEY_EVENT,
+            AVM_PREVIEW_STATUS
     };
 
     static String label(String key) {

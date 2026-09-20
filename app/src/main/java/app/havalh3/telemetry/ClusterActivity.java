@@ -17,12 +17,17 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.TextView;
+import android.view.TextureView;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public final class ClusterActivity extends Activity {
     private final Map<String, TextView> sensorViews = new HashMap<>();
+    private FrameLayout root;
+    private TextureView cameraView;
+    private TextView cameraStatus;
+    private CameraPreviewController cameraPreview;
     private boolean receiverRegistered;
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
@@ -30,6 +35,8 @@ public final class ClusterActivity extends Activity {
         public void onReceive(Context context, Intent intent) {
             if (TelemetryService.ACTION_HIDE_CLUSTER.equals(intent.getAction())) {
                 finishAndRemoveTask();
+            } else if (TelemetryService.ACTION_CAMERA_CHANGED.equals(intent.getAction())) {
+                applyCameraState();
             } else {
                 applySettings();
                 render();
@@ -42,6 +49,11 @@ public final class ClusterActivity extends Activity {
         super.onCreate(savedInstanceState);
         configureTransparentWindow();
         setContentView(createOverlay());
+        cameraPreview = new CameraPreviewController(this, cameraView, message -> {
+            cameraStatus.setText(message);
+            cameraStatus.setVisibility(message == null || message.isEmpty()
+                    ? View.GONE : View.VISIBLE);
+        });
         render();
     }
 
@@ -52,9 +64,11 @@ public final class ClusterActivity extends Activity {
         filter.addAction(TelemetryService.ACTION_UPDATE);
         filter.addAction(TelemetryService.ACTION_HIDE_CLUSTER);
         filter.addAction(TelemetryService.ACTION_SETTINGS_CHANGED);
+        filter.addAction(TelemetryService.ACTION_CAMERA_CHANGED);
         registerReceiver(receiver, filter);
         receiverRegistered = true;
         applySettings();
+        applyCameraState();
         render();
     }
 
@@ -62,6 +76,7 @@ public final class ClusterActivity extends Activity {
     protected void onStop() {
         if (receiverRegistered) unregisterReceiver(receiver);
         receiverRegistered = false;
+        if (cameraPreview != null) cameraPreview.stop();
         super.onStop();
     }
 
@@ -81,8 +96,18 @@ public final class ClusterActivity extends Activity {
     }
 
     private View createOverlay() {
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         root.setBackgroundColor(Color.TRANSPARENT);
+        cameraView = new TextureView(this);
+        cameraView.setVisibility(View.GONE);
+        root.addView(cameraView, new FrameLayout.LayoutParams(-1, -1));
+        cameraStatus = clusterValue();
+        cameraStatus.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        cameraStatus.setGravity(Gravity.CENTER);
+        cameraStatus.setTextColor(Color.WHITE);
+        cameraStatus.setBackgroundColor(Color.argb(150, 0, 0, 0));
+        cameraStatus.setVisibility(View.GONE);
+        root.addView(cameraStatus, new FrameLayout.LayoutParams(-1, -1));
         for (String signal : TelemetrySignals.ALL) {
             TextView view = clusterValue();
             sensorViews.put(signal, view);
@@ -103,6 +128,7 @@ public final class ClusterActivity extends Activity {
     }
 
     private void applySettings() {
+        boolean cameraVisible = CameraState.isVisible();
         for (String signal : TelemetrySignals.ALL) {
             TextView view = sensorViews.get(signal);
             if (view == null) continue;
@@ -116,9 +142,24 @@ public final class ClusterActivity extends Activity {
             view.setLayoutParams(params);
             view.setTextSize(TypedValue.COMPLEX_UNIT_PX,
                     OverlaySettings.getFontSize(this, signal));
-            view.setVisibility(OverlaySettings.isEnabled(this, signal)
+            view.setVisibility(!cameraVisible && OverlaySettings.isEnabled(this, signal)
                     ? View.VISIBLE : View.GONE);
         }
+    }
+
+    private void applyCameraState() {
+        if (root == null || cameraView == null || cameraPreview == null) return;
+        boolean visible = CameraState.isVisible();
+        root.setBackgroundColor(visible ? Color.BLACK : Color.TRANSPARENT);
+        cameraView.setVisibility(visible ? View.VISIBLE : View.GONE);
+        cameraStatus.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (visible) cameraStatus.setText("Подключение камеры…");
+        if (visible) {
+            cameraPreview.start(CameraSettings.getCameraId(this));
+        } else {
+            cameraPreview.stop();
+        }
+        applySettings();
     }
 
     private void render() {

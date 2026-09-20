@@ -1,5 +1,6 @@
 package app.havalh3.telemetry;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
@@ -9,6 +10,7 @@ import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.content.pm.PackageManager;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -19,6 +21,7 @@ import android.widget.Switch;
 import android.widget.TextView;
 
 public final class MainActivity extends Activity {
+    private static final int REQUEST_CAMERA = 203;
     private LinearLayout sensorList;
     private TextView status;
     private boolean receiverRegistered;
@@ -117,7 +120,88 @@ public final class MainActivity extends Activity {
                 : Color.rgb(255, 170, 70));
 
         sensorList.removeAllViews();
+        addCameraRow();
         for (String signal : TelemetrySignals.ALL) addSensorRow(signal);
+    }
+
+    private void addCameraRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(16), dp(7), dp(16), dp(7));
+        row.setBackgroundColor(Color.rgb(38, 31, 24));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setOnClickListener(v -> showCameraDialog());
+
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.addView(text("Фронтальная камера", 17, Color.WHITE, Typeface.BOLD));
+        labels.addView(text("Кнопка левого джойстика  •  источник "
+                        + CameraSettings.getCameraId(this),
+                13, Color.rgb(200, 173, 135), Typeface.NORMAL));
+        row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        TextView state = text(CameraState.isVisible() ? "показывается" : "настроить",
+                16, Color.rgb(255, 157, 27), Typeface.BOLD);
+        state.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        row.addView(state, new LinearLayout.LayoutParams(dp(260), -1));
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(62));
+        params.bottomMargin = dp(7);
+        sensorList.addView(row, params);
+    }
+
+    private void showCameraDialog() {
+        String[] labels = {"Камера 0", "Камера 1", "Камера 2"};
+        int selected;
+        try {
+            selected = Integer.parseInt(CameraSettings.getCameraId(this));
+        } catch (NumberFormatException ignored) {
+            selected = 0;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Фронтальная камера")
+                .setSingleChoiceItems(labels, Math.max(0, Math.min(2, selected)),
+                        (dialog, which) -> {
+                            CameraSettings.setCameraId(this, String.valueOf(which));
+                            CameraState.setVisible(false);
+                            sendBroadcast(new Intent(TelemetryService.ACTION_CAMERA_CHANGED)
+                                    .setPackage(getPackageName()));
+                            renderSensors();
+                        })
+                .setPositiveButton("Показать тест", (dialog, which) -> startCameraTest())
+                .setNeutralButton("Скрыть", (dialog, which) -> stopCameraTest())
+                .setNegativeButton("Закрыть", null)
+                .show();
+    }
+
+    private void startCameraTest() {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA);
+            return;
+        }
+        CameraState.setVisible(true);
+        startTelemetry(TelemetryService.ACTION_SHOW_CLUSTER);
+        sendBroadcast(new Intent(TelemetryService.ACTION_CAMERA_CHANGED)
+                .setPackage(getPackageName()));
+        renderSensors();
+    }
+
+    private void stopCameraTest() {
+        CameraState.setVisible(false);
+        sendBroadcast(new Intent(TelemetryService.ACTION_CAMERA_CHANGED)
+                .setPackage(getPackageName()));
+        renderSensors();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                                          int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CAMERA && grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            startCameraTest();
+        }
     }
 
     private void addSensorRow(String signal) {
