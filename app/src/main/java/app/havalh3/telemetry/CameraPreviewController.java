@@ -35,6 +35,12 @@ final class CameraPreviewController {
     private CameraCaptureSession captureSession;
     private String requestedCameraId;
     private boolean requested;
+    private boolean receivedFrame;
+    private final Runnable frameTimeout = () -> {
+        if (requested && !receivedFrame) {
+            fail("Поток открыт, но видеокадры не поступают");
+        }
+    };
 
     CameraPreviewController(Activity activity, TextureView textureView,
                             StatusCallback statusCallback) {
@@ -60,12 +66,20 @@ final class CameraPreviewController {
 
             @Override
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+                if (!receivedFrame) {
+                    receivedFrame = true;
+                    textureView.removeCallbacks(frameTimeout);
+                    DiagnosticsStore.record(activity,
+                            "first camera frame received id=" + requestedCameraId);
+                    status("");
+                }
             }
         });
     }
 
     void start(String cameraId) {
         requested = true;
+        receivedFrame = false;
         requestedCameraId = cameraId;
         status("Подключение камеры " + cameraId + "…");
         startThread();
@@ -74,6 +88,7 @@ final class CameraPreviewController {
 
     void stop() {
         requested = false;
+        textureView.removeCallbacks(frameTimeout);
         closeCamera();
         stopThread();
     }
@@ -156,7 +171,9 @@ final class CameraPreviewController {
                             captureSession = session;
                             try {
                                 session.setRepeatingRequest(request.build(), null, cameraHandler);
-                                status("");
+                                status("Поток открыт; ожидание видеокадра…");
+                                textureView.removeCallbacks(frameTimeout);
+                                textureView.postDelayed(frameTimeout, 2_500L);
                             } catch (Throwable error) {
                                 fail("Не удалось запустить поток: " + error);
                             }

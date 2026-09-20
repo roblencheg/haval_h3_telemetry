@@ -12,7 +12,6 @@ import android.hardware.display.DisplayManager;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.util.Log;
 import android.view.Display;
 
@@ -34,7 +33,18 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     private GwmAdapterClient client;
     private Handler mainHandler;
     private int clusterLaunchAttempts;
-    private long lastCameraKeyAt;
+    private boolean avmPreviewActive;
+    private static final long CAMERA_ATTACH_DELAY_MS = 1_200L;
+
+    private final Runnable cameraAttachTask = () -> {
+        if (!avmPreviewActive) return;
+        CameraSettings.setCameraId(this, "1");
+        CameraState.setVisible(true);
+        DiagnosticsStore.record(this,
+                "AVM preview active; attaching delayed front-camera probe");
+        requestClusterLaunch();
+        sendLocalAction(ACTION_CAMERA_CHANGED);
+    };
 
     private final Runnable clusterLaunchTask = new Runnable() {
         @Override
@@ -83,6 +93,7 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     @Override
     public void onDestroy() {
         cancelClusterLaunch();
+        if (mainHandler != null) mainHandler.removeCallbacks(cameraAttachTask);
         CameraState.setVisible(false);
         if (client != null) client.stop();
         TelemetryStore.setConnected(false, "Сервис остановлен");
@@ -107,25 +118,30 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
         TelemetryStore.put(key, value);
         if (TelemetrySignals.SYSTEM_KEY_EVENT.equals(key)) {
             handleSystemKeyEvent(value);
+        } else if (TelemetrySignals.AVM_PREVIEW_STATUS.equals(key)) {
+            handleAvmPreviewStatus(value);
         }
         broadcastUpdate();
     }
 
     private void handleSystemKeyEvent(String value) {
-        if (value == null || !"[1007,1]".equals(value.replace(" ", ""))) return;
-        long now = SystemClock.elapsedRealtime();
-        if (now - lastCameraKeyAt < 500L) return;
-        lastCameraKeyAt = now;
-        boolean visible = CameraState.toggle();
-        DiagnosticsStore.record(this,
-                "steering camera key=1007 shortRelease cameraVisible=" + visible);
-        mainHandler.post(() -> {
-            if (visible) requestClusterLaunch();
+        if (value == null || !value.replace(" ", "").startsWith("[1007,")) return;
+        DiagnosticsStore.record(this, "steering camera key=" + value
+                + "; waiting for AVM preview status");
+    }
+
+    private void handleAvmPreviewStatus(String value) {
+        boolean active = "1".equals(value == null ? "" : value.trim());
+        avmPreviewActive = active;
+        mainHandler.removeCallbacks(cameraAttachTask);
+        DiagnosticsStore.record(this, "AVM preview status=" + value
+                + " active=" + active);
+        if (active) {
+            mainHandler.postDelayed(cameraAttachTask, CAMERA_ATTACH_DELAY_MS);
+        } else {
+            CameraState.setVisible(false);
             sendLocalAction(ACTION_CAMERA_CHANGED);
-            if (visible) {
-                mainHandler.postDelayed(() -> sendLocalAction(ACTION_CAMERA_CHANGED), 750L);
-            }
-        });
+        }
     }
 
     private void broadcastUpdate() {

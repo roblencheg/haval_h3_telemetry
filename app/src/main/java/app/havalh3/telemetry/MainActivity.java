@@ -136,7 +136,7 @@ public final class MainActivity extends Activity {
         LinearLayout labels = new LinearLayout(this);
         labels.setOrientation(LinearLayout.VERTICAL);
         labels.addView(text("Фронтальная камера", 17, Color.WHITE, Typeface.BOLD));
-        labels.addView(text("Кнопка левого джойстика  •  источник "
+        labels.addView(text("После запуска штатной камеры  •  источник "
                         + CameraSettings.getCameraId(this),
                 13, Color.rgb(200, 173, 135), Typeface.NORMAL));
         row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -152,7 +152,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showCameraDialog() {
-        String[] labels = {"Камера 0", "Камера 1", "Камера 2"};
+        String[] labels = {"Канал 0 (задний)", "Канал 1 (передний)", "Канал 2 (правый/тестовый)"};
         int selected;
         try {
             selected = Integer.parseInt(CameraSettings.getCameraId(this));
@@ -160,7 +160,7 @@ public final class MainActivity extends Activity {
             selected = 0;
         }
         new AlertDialog.Builder(this)
-                .setTitle("Фронтальная камера")
+                .setTitle("Диагностика видеоканала")
                 .setSingleChoiceItems(labels, Math.max(0, Math.min(2, selected)),
                         (dialog, which) -> {
                             CameraSettings.setCameraId(this, String.valueOf(which));

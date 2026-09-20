@@ -8,7 +8,7 @@ final class CameraSettings {
     private static final String CAMERA_ID = "camera_id";
 
     static String getCameraId(Context context) {
-        return prefs(context).getString(CAMERA_ID, "0");
+        return prefs(context).getString(CAMERA_ID, "1");
     }
 
     static void setCameraId(Context context, String cameraId) {
