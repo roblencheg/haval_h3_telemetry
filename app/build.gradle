@@ -12,8 +12,8 @@ android {
         applicationId 'app.havalh3.telemetry'
         minSdk 28
         targetSdk 28
-        versionCode 9
-        versionName '1.5.0-camera-sync-test'
+        versionCode 10
+        versionName '1.6.0-camera-controls-test'
     }
 
     signingConfigs {

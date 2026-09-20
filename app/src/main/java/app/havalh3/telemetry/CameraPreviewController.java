@@ -78,6 +78,9 @@ final class CameraPreviewController {
     }
 
     void start(String cameraId) {
+        boolean sourceChanged = requestedCameraId != null
+                && !requestedCameraId.equals(cameraId);
+        if (sourceChanged) closeCamera();
         requested = true;
         receivedFrame = false;
         requestedCameraId = cameraId;

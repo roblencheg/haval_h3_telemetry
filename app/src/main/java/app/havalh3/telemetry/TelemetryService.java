@@ -24,6 +24,8 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     static final String ACTION_UPDATE = "app.havalh3.telemetry.UPDATE";
     static final String ACTION_SETTINGS_CHANGED = "app.havalh3.telemetry.SETTINGS_CHANGED";
     static final String ACTION_CAMERA_CHANGED = "app.havalh3.telemetry.CAMERA_CHANGED";
+    static final String ACTION_CAMERA_SETTINGS_CHANGED =
+            "app.havalh3.telemetry.CAMERA_SETTINGS_CHANGED";
 
     private static final String TAG = "H3TelemetryService";
     private static final String CHANNEL_ID = "h3_telemetry";
@@ -37,8 +39,8 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     private static final long CAMERA_ATTACH_DELAY_MS = 1_200L;
 
     private final Runnable cameraAttachTask = () -> {
-        if (!avmPreviewActive) return;
-        CameraSettings.setCameraId(this, "1");
+        if (!avmPreviewActive || !CameraSettings.isFeatureEnabled(this)) return;
+        CameraSettings.setSource(this, CameraSettings.SOURCE_FRONT_BUMPER);
         CameraState.setVisible(true);
         DiagnosticsStore.record(this,
                 "AVM preview active; attaching delayed front-camera probe");
@@ -84,6 +86,8 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
             CameraState.setVisible(false);
             sendLocalAction(ACTION_CAMERA_CHANGED);
             sendLocalAction(ACTION_HIDE_CLUSTER);
+        } else if (ACTION_CAMERA_SETTINGS_CHANGED.equals(action)) {
+            applyCameraFeatureSetting();
         } else if (intent == null && OverlaySettings.isAutoStartEnabled(this)) {
             requestClusterLaunch();
         }
@@ -125,9 +129,14 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     }
 
     private void handleSystemKeyEvent(String value) {
-        if (value == null || !value.replace(" ", "").startsWith("[1007,")) return;
-        DiagnosticsStore.record(this, "steering camera key=" + value
-                + "; waiting for AVM preview status");
+        if (value == null) return;
+        String compact = value.replace(" ", "");
+        if (compact.startsWith("[1007,")) {
+            DiagnosticsStore.record(this, "steering camera key=" + value
+                    + "; waiting for AVM preview status");
+        } else if (avmPreviewActive) {
+            DiagnosticsStore.record(this, "steering event while AVM active=" + value);
+        }
     }
 
     private void handleAvmPreviewStatus(String value) {
@@ -136,11 +145,24 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
         mainHandler.removeCallbacks(cameraAttachTask);
         DiagnosticsStore.record(this, "AVM preview status=" + value
                 + " active=" + active);
-        if (active) {
+        if (active && CameraSettings.isFeatureEnabled(this)) {
             mainHandler.postDelayed(cameraAttachTask, CAMERA_ATTACH_DELAY_MS);
         } else {
             CameraState.setVisible(false);
             sendLocalAction(ACTION_CAMERA_CHANGED);
+        }
+    }
+
+    private void applyCameraFeatureSetting() {
+        mainHandler.removeCallbacks(cameraAttachTask);
+        boolean enabled = CameraSettings.isFeatureEnabled(this);
+        DiagnosticsStore.record(this, "camera feature enabled=" + enabled
+                + " avmActive=" + avmPreviewActive);
+        if (!enabled) {
+            CameraState.setVisible(false);
+            sendLocalAction(ACTION_CAMERA_CHANGED);
+        } else if (avmPreviewActive) {
+            mainHandler.postDelayed(cameraAttachTask, CAMERA_ATTACH_DELAY_MS);
         }
     }
 

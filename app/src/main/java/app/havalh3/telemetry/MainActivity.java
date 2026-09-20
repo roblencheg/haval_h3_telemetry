@@ -25,6 +25,7 @@ public final class MainActivity extends Activity {
     private LinearLayout sensorList;
     private TextView status;
     private boolean receiverRegistered;
+    private boolean enableCameraAfterPermission;
 
     private final BroadcastReceiver updateReceiver = new BroadcastReceiver() {
         @Override
@@ -135,9 +136,9 @@ public final class MainActivity extends Activity {
 
         LinearLayout labels = new LinearLayout(this);
         labels.setOrientation(LinearLayout.VERTICAL);
-        labels.addView(text("Фронтальная камера", 17, Color.WHITE, Typeface.BOLD));
-        labels.addView(text("После запуска штатной камеры  •  источник "
-                        + CameraSettings.getCameraId(this),
+        labels.addView(text("Камеры на приборной панели", 17, Color.WHITE, Typeface.BOLD));
+        labels.addView(text((CameraSettings.isFeatureEnabled(this) ? "Включено" : "Выключено")
+                        + "  •  " + CameraSettings.sourceLabel(this),
                 13, Color.rgb(200, 173, 135), Typeface.NORMAL));
         row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
 
@@ -152,33 +153,95 @@ public final class MainActivity extends Activity {
     }
 
     private void showCameraDialog() {
-        String[] labels = {"Канал 0 (задний)", "Канал 1 (передний)", "Канал 2 (правый/тестовый)"};
-        int selected;
-        try {
-            selected = Integer.parseInt(CameraSettings.getCameraId(this));
-        } catch (NumberFormatException ignored) {
-            selected = 0;
-        }
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(22), dp(6), dp(22), dp(12));
+
+        Switch enabled = new Switch(this);
+        enabled.setText("Показывать камеры на приборной панели");
+        enabled.setTextColor(Color.WHITE);
+        enabled.setTextSize(17);
+        enabled.setChecked(CameraSettings.isFeatureEnabled(this));
+        panel.addView(enabled, new LinearLayout.LayoutParams(-1, dp(56)));
+
+        TextView source = text("Источник: " + CameraSettings.sourceLabel(this),
+                16, Color.LTGRAY, Typeface.BOLD);
+        panel.addView(source);
+
+        TextView hint = text(
+                "При включении открывается передняя нижняя камера. "
+                        + "Джойстик вверх выбирает верхнюю камеру, вниз — заднюю.",
+                14, Color.rgb(180, 186, 196), Typeface.NORMAL);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
+        hintParams.topMargin = dp(6);
+        hintParams.bottomMargin = dp(8);
+        panel.addView(hint, hintParams);
+
+        Button front = new Button(this);
+        front.setText("Передняя нижняя камера");
+        front.setOnClickListener(v -> selectCameraSource(
+                CameraSettings.SOURCE_FRONT_BUMPER, source));
+        panel.addView(front, new LinearLayout.LayoutParams(-1, dp(52)));
+
+        Button windshield = new Button(this);
+        windshield.setText("Верхняя камера на стекле (поиск канала)");
+        windshield.setOnClickListener(v -> selectCameraSource(
+                CameraSettings.SOURCE_WINDSHIELD, source));
+        panel.addView(windshield, new LinearLayout.LayoutParams(-1, dp(52)));
+
+        Button rear = new Button(this);
+        rear.setText("Задняя камера");
+        rear.setOnClickListener(v -> selectCameraSource(CameraSettings.SOURCE_REAR, source));
+        panel.addView(rear, new LinearLayout.LayoutParams(-1, dp(52)));
+
+        enabled.setOnCheckedChangeListener((button, checked) -> {
+            if (checked && checkSelfPermission(Manifest.permission.CAMERA)
+                    != PackageManager.PERMISSION_GRANTED) {
+                enableCameraAfterPermission = true;
+                button.setChecked(false);
+                requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA);
+                return;
+            }
+            setCameraFeatureEnabled(checked);
+        });
+
         new AlertDialog.Builder(this)
-                .setTitle("Диагностика видеоканала")
-                .setSingleChoiceItems(labels, Math.max(0, Math.min(2, selected)),
-                        (dialog, which) -> {
-                            CameraSettings.setCameraId(this, String.valueOf(which));
-                            CameraState.setVisible(false);
-                            sendBroadcast(new Intent(TelemetryService.ACTION_CAMERA_CHANGED)
-                                    .setPackage(getPackageName()));
-                            renderSensors();
-                        })
-                .setPositiveButton("Показать тест", (dialog, which) -> startCameraTest())
+                .setTitle("Камеры")
+                .setView(panel)
+                .setPositiveButton("Показать сейчас", (dialog, which) -> startCameraTest())
                 .setNeutralButton("Скрыть", (dialog, which) -> stopCameraTest())
-                .setNegativeButton("Закрыть", null)
+                .setNegativeButton("Готово", null)
                 .show();
+    }
+
+    private void selectCameraSource(String selectedSource, TextView label) {
+        CameraSettings.setSource(this, selectedSource);
+        label.setText("Источник: " + CameraSettings.sourceLabel(this));
+        if (CameraState.isVisible()) {
+            sendBroadcast(new Intent(TelemetryService.ACTION_CAMERA_CHANGED)
+                    .setPackage(getPackageName()));
+        }
+        DiagnosticsStore.record(this, "manual camera source=" + selectedSource);
+        renderSensors();
+    }
+
+    private void setCameraFeatureEnabled(boolean enabled) {
+        CameraSettings.setFeatureEnabled(this, enabled);
+        if (!enabled) CameraState.setVisible(false);
+        startTelemetry(TelemetryService.ACTION_CAMERA_SETTINGS_CHANGED);
+        sendBroadcast(new Intent(TelemetryService.ACTION_CAMERA_CHANGED)
+                .setPackage(getPackageName()));
+        renderSensors();
     }
 
     private void startCameraTest() {
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            enableCameraAfterPermission = true;
             requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA);
             return;
+        }
+        if (!CameraSettings.isFeatureEnabled(this)) {
+            setCameraFeatureEnabled(true);
         }
         CameraState.setVisible(true);
         startTelemetry(TelemetryService.ACTION_SHOW_CLUSTER);
@@ -200,7 +263,11 @@ public final class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CAMERA && grantResults.length > 0
                 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            if (enableCameraAfterPermission) setCameraFeatureEnabled(true);
+            enableCameraAfterPermission = false;
             startCameraTest();
+        } else if (requestCode == REQUEST_CAMERA) {
+            enableCameraAfterPermission = false;
         }
     }
 

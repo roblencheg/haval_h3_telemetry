@@ -155,7 +155,14 @@ public final class ClusterActivity extends Activity {
         cameraStatus.setVisibility(visible ? View.VISIBLE : View.GONE);
         if (visible) cameraStatus.setText("Подключение камеры…");
         if (visible) {
-            cameraPreview.start(CameraSettings.getCameraId(this));
+            String cameraId = CameraSettings.cameraIdForSource(this);
+            if (cameraId == null) {
+                cameraPreview.stop();
+                cameraStatus.setText("Верхняя камера: видеоканал ещё не найден");
+                cameraStatus.setVisibility(View.VISIBLE);
+            } else {
+                cameraPreview.start(cameraId);
+            }
         } else {
             cameraPreview.stop();
         }
@@ -174,6 +181,23 @@ public final class ClusterActivity extends Activity {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         DiagnosticsStore.recordKeyEvent(this, "ClusterActivity", event);
+        if (CameraState.isVisible() && CameraSettings.isFeatureEnabled(this)
+                && event.getAction() == KeyEvent.ACTION_UP) {
+            if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_UP) {
+                selectCameraSource(CameraSettings.SOURCE_WINDSHIELD, "joystick up");
+                return true;
+            }
+            if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN) {
+                selectCameraSource(CameraSettings.SOURCE_REAR, "joystick down");
+                return true;
+            }
+        }
         return super.dispatchKeyEvent(event);
+    }
+
+    private void selectCameraSource(String source, String origin) {
+        CameraSettings.setSource(this, source);
+        DiagnosticsStore.record(this, origin + "; source=" + source);
+        applyCameraState();
     }
 }
