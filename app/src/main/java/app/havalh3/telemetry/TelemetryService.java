@@ -40,11 +40,12 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
 
     private final Runnable cameraAttachTask = () -> {
         if (!avmPreviewActive || !CameraSettings.isFeatureEnabled(this)) return;
+        boolean wasVisible = CameraState.isVisible();
         CameraSettings.setSource(this, CameraSettings.SOURCE_FRONT_BUMPER);
         CameraState.setVisible(true);
         DiagnosticsStore.record(this,
                 "AVM preview active; attaching delayed front-camera probe");
-        requestClusterLaunch();
+        if (!wasVisible) requestClusterLaunch();
         sendLocalAction(ACTION_CAMERA_CHANGED);
     };
 
@@ -150,10 +151,16 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     }
 
     private void selectCameraSource(String source, String origin) {
+        boolean wasVisible = CameraState.isVisible();
+        String previous = CameraSettings.getSource(this);
+        if (wasVisible && source.equals(previous)) {
+            DiagnosticsStore.record(this, origin + "; duplicate source ignored=" + source);
+            return;
+        }
         CameraSettings.setSource(this, source);
         CameraState.setVisible(true);
         DiagnosticsStore.record(this, origin + "; source=" + source);
-        requestClusterLaunch();
+        if (!wasVisible) requestClusterLaunch();
         sendLocalAction(ACTION_CAMERA_CHANGED);
     }
 

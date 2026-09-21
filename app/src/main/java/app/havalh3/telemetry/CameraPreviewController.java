@@ -3,6 +3,7 @@ package app.havalh3.telemetry;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCaptureSession;
@@ -36,9 +37,19 @@ final class CameraPreviewController {
     private String requestedCameraId;
     private boolean requested;
     private boolean receivedFrame;
+    private int frameUpdates;
+    private int lastMinLuma;
+    private int lastMaxLuma;
     private final Runnable frameTimeout = () -> {
         if (requested && !receivedFrame) {
-            fail("Поток открыт, но видеокадры не поступают");
+            if (frameUpdates > 0) {
+                fail("Видеобуфер обновляется, но изображение пустое");
+                DiagnosticsStore.record(activity, "empty camera buffers id="
+                        + requestedCameraId + " updates=" + frameUpdates
+                        + " luma=" + lastMinLuma + ".." + lastMaxLuma);
+            } else {
+                fail("Поток открыт, но видеобуферы не поступают");
+            }
         }
     };
 
@@ -66,11 +77,15 @@ final class CameraPreviewController {
 
             @Override
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-                if (!receivedFrame) {
+                frameUpdates++;
+                if (!receivedFrame && (frameUpdates == 1 || frameUpdates % 8 == 0)
+                        && hasVisibleImage()) {
                     receivedFrame = true;
                     textureView.removeCallbacks(frameTimeout);
                     DiagnosticsStore.record(activity,
-                            "first camera frame received id=" + requestedCameraId);
+                            "first visible camera image id=" + requestedCameraId
+                                    + " updates=" + frameUpdates
+                                    + " luma=" + lastMinLuma + ".." + lastMaxLuma);
                     status("");
                 }
             }
@@ -83,6 +98,9 @@ final class CameraPreviewController {
         if (sourceChanged) closeCamera();
         requested = true;
         receivedFrame = false;
+        frameUpdates = 0;
+        lastMinLuma = 0;
+        lastMaxLuma = 0;
         requestedCameraId = cameraId;
         status("Подключение камеры " + cameraId + "…");
         startThread();
@@ -176,7 +194,7 @@ final class CameraPreviewController {
                                 session.setRepeatingRequest(request.build(), null, cameraHandler);
                                 status("Поток открыт; ожидание видеокадра…");
                                 textureView.removeCallbacks(frameTimeout);
-                                textureView.postDelayed(frameTimeout, 2_500L);
+                                textureView.postDelayed(frameTimeout, 5_000L);
                             } catch (Throwable error) {
                                 fail("Не удалось запустить поток: " + error);
                             }
@@ -202,6 +220,38 @@ final class CameraPreviewController {
         matrix.setScale(uniform / baseX, uniform / baseY,
                 viewWidth / 2f, viewHeight / 2f);
         textureView.setTransform(matrix);
+    }
+
+    private boolean hasVisibleImage() {
+        Bitmap sample = null;
+        try {
+            sample = textureView.getBitmap(64, 36);
+            if (sample == null) return false;
+            int min = 255;
+            int max = 0;
+            int nonBlack = 0;
+            int total = sample.getWidth() * sample.getHeight();
+            int[] pixels = new int[total];
+            sample.getPixels(pixels, 0, sample.getWidth(), 0, 0,
+                    sample.getWidth(), sample.getHeight());
+            for (int color : pixels) {
+                int red = (color >> 16) & 0xff;
+                int green = (color >> 8) & 0xff;
+                int blue = color & 0xff;
+                int luma = (red * 3 + green * 6 + blue) / 10;
+                min = Math.min(min, luma);
+                max = Math.max(max, luma);
+                if (luma > 5) nonBlack++;
+            }
+            lastMinLuma = min;
+            lastMaxLuma = max;
+            return max - min >= 4 && nonBlack >= Math.max(1, total / 100);
+        } catch (Throwable error) {
+            DiagnosticsStore.record(activity, "camera bitmap sample failed=" + error);
+            return false;
+        } finally {
+            if (sample != null) sample.recycle();
+        }
     }
 
     private void closeCamera() {

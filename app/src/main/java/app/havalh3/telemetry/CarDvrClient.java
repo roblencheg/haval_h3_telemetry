@@ -1,6 +1,9 @@
 package app.havalh3.telemetry;
 
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -13,6 +16,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /** Reflective client for the undocumented GWM DVR service shipped in android.car.jar. */
 final class CarDvrClient {
@@ -38,6 +43,9 @@ final class CarDvrClient {
     private Object eventCallback;
     private String stopRequestId;
     private int[] previewPayload;
+    private volatile IBinder carBinder;
+    private ServiceConnection carConnection;
+    private boolean carServiceBound;
 
     CarDvrClient(Context context, Callback callback) {
         this.context = context.getApplicationContext();
@@ -68,7 +76,7 @@ final class CarDvrClient {
 
     private void connectAndStart() {
         try {
-            IBinder carBinder = service("car_service");
+            IBinder carBinder = bindCarService();
             if (carBinder == null) throw new IllegalStateException("car_service не найден");
 
             Class<?> carStub = Class.forName("android.car.ICar$Stub");
@@ -161,13 +169,12 @@ final class CarDvrClient {
     }
 
     private void stopInternal() {
-        if (dvrService == null) return;
         try {
-            if (stopRequestId != null && previewPayload != null) {
+            if (dvrService != null && stopRequestId != null && previewPayload != null) {
                 Object result = invoke(dvrService, "request", stopRequestId, previewPayload);
                 recordEvent("car_dvr stop result", result == null ? null : String.valueOf(result));
             }
-            if (eventCallback != null) {
+            if (dvrService != null && eventCallback != null) {
                 invoke(dvrService, "unRegisterEventCallback", eventCallback);
             }
         } catch (Throwable error) {
@@ -175,6 +182,7 @@ final class CarDvrClient {
         } finally {
             dvrService = null;
             eventCallback = null;
+            unbindCarService();
         }
     }
 
@@ -182,9 +190,60 @@ final class CarDvrClient {
         DiagnosticsStore.record(context, label + "=" + value);
     }
 
-    private static IBinder service(String name) throws Exception {
-        Class<?> manager = Class.forName("android.os.ServiceManager");
-        return (IBinder) manager.getMethod("getService", String.class).invoke(null, name);
+    private IBinder bindCarService() throws Exception {
+        unbindCarService();
+        CountDownLatch connected = new CountDownLatch(1);
+        carConnection = new ServiceConnection() {
+            @Override
+            public void onServiceConnected(ComponentName name, IBinder service) {
+                carBinder = service;
+                DiagnosticsStore.record(context,
+                        "CarService connected component=" + name);
+                connected.countDown();
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                carBinder = null;
+                DiagnosticsStore.record(context,
+                        "CarService disconnected component=" + name);
+            }
+        };
+
+        Intent implicit = new Intent("android.car.ICar").setPackage("com.android.car");
+        boolean accepted = context.bindService(
+                implicit, carConnection, Context.BIND_AUTO_CREATE);
+        DiagnosticsStore.record(context,
+                "CarService action bind accepted=" + accepted);
+        if (!accepted) {
+            Intent explicit = new Intent().setComponent(
+                    new ComponentName("com.android.car", "com.android.car.CarService"));
+            accepted = context.bindService(
+                    explicit, carConnection, Context.BIND_AUTO_CREATE);
+            DiagnosticsStore.record(context,
+                    "CarService explicit bind accepted=" + accepted);
+        }
+        carServiceBound = accepted;
+        if (!accepted) throw new IllegalStateException("CarService отклонил подключение");
+        if (!connected.await(4, TimeUnit.SECONDS) || carBinder == null) {
+            unbindCarService();
+            throw new IllegalStateException("CarService не ответил за 4 секунды");
+        }
+        return carBinder;
+    }
+
+    private void unbindCarService() {
+        if (carServiceBound && carConnection != null) {
+            try {
+                context.unbindService(carConnection);
+            } catch (Throwable error) {
+                DiagnosticsStore.record(context,
+                        "CarService unbind failed=" + rootCause(error));
+            }
+        }
+        carServiceBound = false;
+        carConnection = null;
+        carBinder = null;
     }
 
     private String staticValue(String className, String fieldName) throws Exception {
