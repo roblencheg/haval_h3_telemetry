@@ -26,8 +26,10 @@ public final class ClusterActivity extends Activity {
     private final Map<String, TextView> sensorViews = new HashMap<>();
     private FrameLayout root;
     private TextureView cameraView;
+    private TextureView dvrCameraView;
     private TextView cameraStatus;
     private CameraPreviewController cameraPreview;
+    private DvrPreviewController dvrPreview;
     private boolean receiverRegistered;
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
@@ -50,6 +52,11 @@ public final class ClusterActivity extends Activity {
         configureTransparentWindow();
         setContentView(createOverlay());
         cameraPreview = new CameraPreviewController(this, cameraView, message -> {
+            cameraStatus.setText(message);
+            cameraStatus.setVisibility(message == null || message.isEmpty()
+                    ? View.GONE : View.VISIBLE);
+        });
+        dvrPreview = new DvrPreviewController(this, dvrCameraView, message -> {
             cameraStatus.setText(message);
             cameraStatus.setVisibility(message == null || message.isEmpty()
                     ? View.GONE : View.VISIBLE);
@@ -77,7 +84,14 @@ public final class ClusterActivity extends Activity {
         if (receiverRegistered) unregisterReceiver(receiver);
         receiverRegistered = false;
         if (cameraPreview != null) cameraPreview.stop();
+        if (dvrPreview != null) dvrPreview.stop();
         super.onStop();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (dvrPreview != null) dvrPreview.release();
+        super.onDestroy();
     }
 
     private void configureTransparentWindow() {
@@ -101,6 +115,9 @@ public final class ClusterActivity extends Activity {
         cameraView = new TextureView(this);
         cameraView.setVisibility(View.GONE);
         root.addView(cameraView, new FrameLayout.LayoutParams(-1, -1));
+        dvrCameraView = new TextureView(this);
+        dvrCameraView.setVisibility(View.GONE);
+        root.addView(dvrCameraView, new FrameLayout.LayoutParams(-1, -1));
         cameraStatus = clusterValue();
         cameraStatus.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         cameraStatus.setGravity(Gravity.CENTER);
@@ -148,23 +165,28 @@ public final class ClusterActivity extends Activity {
     }
 
     private void applyCameraState() {
-        if (root == null || cameraView == null || cameraPreview == null) return;
+        if (root == null || cameraView == null || dvrCameraView == null
+                || cameraPreview == null || dvrPreview == null) return;
         boolean visible = CameraState.isVisible();
+        boolean windshield = CameraSettings.SOURCE_WINDSHIELD.equals(
+                CameraSettings.getSource(this));
         root.setBackgroundColor(visible ? Color.BLACK : Color.TRANSPARENT);
-        cameraView.setVisibility(visible ? View.VISIBLE : View.GONE);
+        cameraView.setVisibility(visible && !windshield ? View.VISIBLE : View.GONE);
+        dvrCameraView.setVisibility(visible && windshield ? View.VISIBLE : View.GONE);
         cameraStatus.setVisibility(visible ? View.VISIBLE : View.GONE);
         if (visible) cameraStatus.setText("Подключение камеры…");
         if (visible) {
-            String cameraId = CameraSettings.cameraIdForSource(this);
-            if (cameraId == null) {
+            if (windshield) {
                 cameraPreview.stop();
-                cameraStatus.setText("Верхняя камера: видеоканал ещё не найден");
-                cameraStatus.setVisibility(View.VISIBLE);
+                dvrPreview.start();
             } else {
+                dvrPreview.stop();
+                String cameraId = CameraSettings.cameraIdForSource(this);
                 cameraPreview.start(cameraId);
             }
         } else {
             cameraPreview.stop();
+            dvrPreview.stop();
         }
         applySettings();
     }

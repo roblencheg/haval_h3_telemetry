@@ -134,9 +134,27 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
         if (compact.startsWith("[1007,")) {
             DiagnosticsStore.record(this, "steering camera key=" + value
                     + "; waiting for AVM preview status");
-        } else if (avmPreviewActive) {
-            DiagnosticsStore.record(this, "steering event while AVM active=" + value);
+        } else if (avmPreviewActive && CameraSettings.isFeatureEnabled(this)) {
+            // GWM consumes these buttons before Android can produce DPAD KeyEvents.
+            // Act on release only, otherwise every press would be handled twice.
+            if ("[1000,1]".equals(compact)) {
+                selectCameraSource(CameraSettings.SOURCE_WINDSHIELD,
+                        "GWM joystick up (1000)");
+            } else if ("[1001,1]".equals(compact)) {
+                selectCameraSource(CameraSettings.SOURCE_REAR,
+                        "GWM joystick down (1001)");
+            } else {
+                DiagnosticsStore.record(this, "steering event while AVM active=" + value);
+            }
         }
+    }
+
+    private void selectCameraSource(String source, String origin) {
+        CameraSettings.setSource(this, source);
+        CameraState.setVisible(true);
+        DiagnosticsStore.record(this, origin + "; source=" + source);
+        requestClusterLaunch();
+        sendLocalAction(ACTION_CAMERA_CHANGED);
     }
 
     private void handleAvmPreviewStatus(String value) {

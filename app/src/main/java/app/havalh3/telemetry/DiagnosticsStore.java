@@ -48,7 +48,7 @@ final class DiagnosticsStore {
         notifyChanged(context);
     }
 
-    private static void append(Context context, String line) {
+    private static synchronized void append(Context context, String line) {
         Log.i(TAG, line);
         SharedPreferences preferences = prefs(context);
         String old = preferences.getString(KEY_EVENTS, "");

@@ -184,7 +184,7 @@ public final class MainActivity extends Activity {
         panel.addView(front, new LinearLayout.LayoutParams(-1, dp(52)));
 
         Button windshield = new Button(this);
-        windshield.setText("Верхняя камера на стекле (поиск канала)");
+        windshield.setText("Верхняя камера на лобовом стекле");
         windshield.setOnClickListener(v -> selectCameraSource(
                 CameraSettings.SOURCE_WINDSHIELD, source));
         panel.addView(windshield, new LinearLayout.LayoutParams(-1, dp(52)));
