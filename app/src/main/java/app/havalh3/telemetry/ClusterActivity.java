@@ -125,7 +125,7 @@ public final class ClusterActivity extends Activity {
         cameraStatus.setBackgroundColor(Color.argb(150, 0, 0, 0));
         cameraStatus.setVisibility(View.GONE);
         root.addView(cameraStatus, new FrameLayout.LayoutParams(-1, -1));
-        for (String signal : TelemetrySignals.ALL) {
+        for (String signal : TelemetrySignals.DISPLAY_ELEMENTS) {
             TextView view = clusterValue();
             sensorViews.put(signal, view);
             root.addView(view);
@@ -146,7 +146,7 @@ public final class ClusterActivity extends Activity {
 
     private void applySettings() {
         boolean cameraVisible = CameraState.isVisible();
-        for (String signal : TelemetrySignals.ALL) {
+        for (String signal : TelemetrySignals.DISPLAY_ELEMENTS) {
             TextView view = sensorViews.get(signal);
             if (view == null) continue;
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
@@ -192,7 +192,7 @@ public final class ClusterActivity extends Activity {
     }
 
     private void render() {
-        for (String signal : TelemetrySignals.ALL) {
+        for (String signal : TelemetrySignals.DISPLAY_ELEMENTS) {
             TextView view = sensorViews.get(signal);
             if (view == null) continue;
             String value = TelemetryStore.displayText(signal);

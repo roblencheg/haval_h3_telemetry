@@ -88,6 +88,7 @@ final class CarDvrClient {
 
             Class<?> dvrStub = Class.forName(DVR_STUB);
             dvrService = invokeStatic(dvrStub, "asInterface", dvrBinder);
+            recordRequestSignatures();
             registerCallback();
 
             String startRequestId = staticValue(DVR_IDS, "REQUEST_START_PREVIEW");
@@ -147,11 +148,35 @@ final class CarDvrClient {
     }
 
     private int[] buildPreviewPayload(int dvrId) throws Exception {
-        Class<?> preview = Class.forName(PREVIEW_REQUEST);
-        Object builder = invokeStatic(preview, "builder");
-        invoke(builder, "setDvrId", dvrId);
-        Object request = invoke(builder, "build");
-        return (int[]) invoke(request, "toArray");
+        try {
+            Class<?> preview = Class.forName(PREVIEW_REQUEST);
+            Object builder = invokeStatic(preview, "builder");
+            if (builder != null) {
+                invoke(builder, "setDvrId", dvrId);
+                Object request = invoke(builder, "build");
+                if (request != null) {
+                    int[] payload = (int[]) invoke(request, "toArray");
+                    if (payload != null && payload.length > 0) return payload;
+                }
+            }
+            DiagnosticsStore.record(context,
+                    "car_dvr GwmPreview builder returned no payload; using raw DVR id");
+        } catch (Throwable error) {
+            DiagnosticsStore.record(context,
+                    "car_dvr GwmPreview builder failed=" + rootCause(error)
+                            + "; using raw DVR id");
+        }
+        return new int[]{dvrId};
+    }
+
+    private void recordRequestSignatures() {
+        if (dvrService == null) return;
+        for (Method method : dvrService.getClass().getMethods()) {
+            if ("request".equals(method.getName())) {
+                DiagnosticsStore.record(context,
+                        "car_dvr request signature=" + method.toGenericString());
+            }
+        }
     }
 
     private void parseEvent(String[] event) {
@@ -252,9 +277,11 @@ final class CarDvrClient {
             if (Modifier.isStatic(field.getModifiers())) {
                 field.setAccessible(true);
                 Object value = field.get(null);
-                DiagnosticsStore.record(context,
-                        "car_dvr constant " + field.getName() + "=" + value);
-                if (fieldName.equals(field.getName())) return String.valueOf(value);
+                if (fieldName.equals(field.getName())) {
+                    DiagnosticsStore.record(context,
+                            "car_dvr constant " + field.getName() + "=" + value);
+                    return String.valueOf(value);
+                }
             }
         }
         throw new NoSuchFieldException(className + "." + fieldName);

@@ -17,6 +17,7 @@ final class TelemetrySignals {
     static final String ENGINE_STATE = "car.basic.engine_state";
     static final String TPMS_STATUS = "car.basic.tpms_status";
     static final String TPMS_UNITS = "car.basic.tpms_units";
+    static final String CURRENT_DATE = "app.current_date";
     static final String SYSTEM_KEY_EVENT = "sys.other.keyevent_notify";
     static final String AVM_PREVIEW_STATUS = "sys.avm.preview_status";
 
@@ -60,6 +61,26 @@ final class TelemetrySignals {
             AVM_PREVIEW_STATUS
     };
 
+    static final String[] DISPLAY_ELEMENTS = {
+            FUEL_PERCENT,
+            COOLANT_TEMP,
+            BATTERY_VOLTAGE,
+            MASTER_OIL_LEVEL,
+            EV_BATTERY_PERCENT,
+            ENGINE_OIL_NOTIFY,
+            INSIDE_TEMP,
+            BATTERY_POWER_LEVEL,
+            CURRENT_GEAR,
+            GEAR_STATUS,
+            AVG_FUEL,
+            JOURNEY_AVG_FUEL,
+            ODOMETER,
+            ENGINE_STATE,
+            TPMS_STATUS,
+            TPMS_UNITS,
+            CURRENT_DATE
+    };
+
     static String label(String key) {
         if (FUEL_PERCENT.equals(key)) return "Остаток топлива";
         if (COOLANT_TEMP.equals(key)) return "Температура охлаждающей жидкости";
@@ -77,6 +98,7 @@ final class TelemetrySignals {
         if (ENGINE_STATE.equals(key)) return "Состояние двигателя";
         if (TPMS_STATUS.equals(key)) return "Состояние датчиков давления шин";
         if (TPMS_UNITS.equals(key)) return "Единицы давления в шинах";
+        if (CURRENT_DATE.equals(key)) return "Сегодняшняя дата";
         return key;
     }
 

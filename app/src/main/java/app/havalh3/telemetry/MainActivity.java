@@ -122,7 +122,7 @@ public final class MainActivity extends Activity {
 
         sensorList.removeAllViews();
         addCameraRow();
-        for (String signal : TelemetrySignals.ALL) addSensorRow(signal);
+        for (String signal : TelemetrySignals.DISPLAY_ELEMENTS) addSensorRow(signal);
     }
 
     private void addCameraRow() {

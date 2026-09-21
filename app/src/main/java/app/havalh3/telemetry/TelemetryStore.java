@@ -1,6 +1,8 @@
 package app.havalh3.telemetry;
 
 import java.util.Collections;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -65,6 +67,9 @@ final class TelemetryStore {
     }
 
     static String displayText(String key) {
+        if (TelemetrySignals.CURRENT_DATE.equals(key)) {
+            return new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(new Date());
+        }
         if (TelemetrySignals.FUEL_PERCENT.equals(key)) return fuelText();
         if (TelemetrySignals.COOLANT_TEMP.equals(key)) return coolantText();
         if (TelemetrySignals.BATTERY_VOLTAGE.equals(key)) return batteryText();

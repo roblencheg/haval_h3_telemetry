@@ -8,7 +8,7 @@ final class OverlaySettings {
     static final String FUEL = TelemetrySignals.FUEL_PERCENT;
     static final String COOLANT = TelemetrySignals.COOLANT_TEMP;
     static final String BATTERY = TelemetrySignals.BATTERY_VOLTAGE;
-    static final String[] ELEMENTS = TelemetrySignals.ALL;
+    static final String[] ELEMENTS = TelemetrySignals.DISPLAY_ELEMENTS;
 
     static final int DISPLAY_WIDTH = 1920;
     static final int DISPLAY_HEIGHT = 720;

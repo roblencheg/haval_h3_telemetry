@@ -89,6 +89,7 @@ public final class DiagnosticsActivity extends Activity {
         root.addView(hint);
 
         LinearLayout actions = new LinearLayout(this);
+        addButton(actions, "Назад", this::finish);
         addButton(actions, "Обновить", this::renderReport);
         addButton(actions, "Копировать", this::copyReport);
         addButton(actions, "Поделиться", this::shareReport);
