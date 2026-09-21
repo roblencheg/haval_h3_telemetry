@@ -42,7 +42,7 @@ final class CarDvrClient {
     private Object dvrService;
     private Object eventCallback;
     private String stopRequestId;
-    private int[] previewPayload;
+    private String[] previewPayload;
     private volatile IBinder carBinder;
     private ServiceConnection carConnection;
     private boolean carServiceBound;
@@ -147,7 +147,7 @@ final class CarDvrClient {
         DiagnosticsStore.record(context, "car_dvr callback registered");
     }
 
-    private int[] buildPreviewPayload(int dvrId) throws Exception {
+    private String[] buildPreviewPayload(int dvrId) throws Exception {
         try {
             Class<?> preview = Class.forName(PREVIEW_REQUEST);
             Object builder = invokeStatic(preview, "builder");
@@ -155,7 +155,7 @@ final class CarDvrClient {
                 invoke(builder, "setDvrId", dvrId);
                 Object request = invoke(builder, "build");
                 if (request != null) {
-                    int[] payload = (int[]) invoke(request, "toArray");
+                    String[] payload = (String[]) invoke(request, "toArray");
                     if (payload != null && payload.length > 0) return payload;
                 }
             }
@@ -166,7 +166,7 @@ final class CarDvrClient {
                     "car_dvr GwmPreview builder failed=" + rootCause(error)
                             + "; using raw DVR id");
         }
-        return new int[]{dvrId};
+        return new String[]{String.valueOf(dvrId)};
     }
 
     private void recordRequestSignatures() {
