@@ -44,9 +44,7 @@ final class CameraPreviewController {
         if (requested && !receivedFrame) {
             if (frameUpdates > 0) {
                 fail("Видеобуфер обновляется, но изображение пустое");
-                DiagnosticsStore.record(activity, "empty camera buffers id="
-                        + requestedCameraId + " updates=" + frameUpdates
-                        + " luma=" + lastMinLuma + ".." + lastMaxLuma);
+                recordEmptyBuffers();
             } else {
                 fail("Поток открыт, но видеобуферы не поступают");
             }
@@ -252,6 +250,12 @@ final class CameraPreviewController {
         } finally {
             if (sample != null) sample.recycle();
         }
+    }
+
+    private void recordEmptyBuffers() {
+        DiagnosticsStore.record(activity, "empty camera buffers id="
+                + requestedCameraId + " updates=" + frameUpdates
+                + " luma=" + lastMinLuma + ".." + lastMaxLuma);
     }
 
     private void closeCamera() {
