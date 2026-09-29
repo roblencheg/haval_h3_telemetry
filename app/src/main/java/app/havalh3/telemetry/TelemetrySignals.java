@@ -18,8 +18,6 @@ final class TelemetrySignals {
     static final String TPMS_STATUS = "car.basic.tpms_status";
     static final String TPMS_UNITS = "car.basic.tpms_units";
     static final String CURRENT_DATE = "app.current_date";
-    static final String SYSTEM_KEY_EVENT = "sys.other.keyevent_notify";
-    static final String AVM_PREVIEW_STATUS = "sys.avm.preview_status";
 
     static final String[] ALL = {
             FUEL_PERCENT,
@@ -56,9 +54,7 @@ final class TelemetrySignals {
             ODOMETER,
             ENGINE_STATE,
             TPMS_STATUS,
-            TPMS_UNITS,
-            SYSTEM_KEY_EVENT,
-            AVM_PREVIEW_STATUS
+            TPMS_UNITS
     };
 
     static final String[] DISPLAY_ELEMENTS = {

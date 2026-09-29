@@ -23,9 +23,6 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     static final String ACTION_HIDE_CLUSTER = "app.havalh3.telemetry.HIDE_CLUSTER";
     static final String ACTION_UPDATE = "app.havalh3.telemetry.UPDATE";
     static final String ACTION_SETTINGS_CHANGED = "app.havalh3.telemetry.SETTINGS_CHANGED";
-    static final String ACTION_CAMERA_CHANGED = "app.havalh3.telemetry.CAMERA_CHANGED";
-    static final String ACTION_CAMERA_SETTINGS_CHANGED =
-            "app.havalh3.telemetry.CAMERA_SETTINGS_CHANGED";
 
     private static final String TAG = "H3TelemetryService";
     private static final String CHANNEL_ID = "h3_telemetry";
@@ -35,19 +32,6 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     private GwmAdapterClient client;
     private Handler mainHandler;
     private int clusterLaunchAttempts;
-    private boolean avmPreviewActive;
-    private static final long CAMERA_ATTACH_DELAY_MS = 1_200L;
-
-    private final Runnable cameraAttachTask = () -> {
-        if (!avmPreviewActive || !CameraSettings.isFeatureEnabled(this)) return;
-        boolean wasVisible = CameraState.isVisible();
-        CameraSettings.setSource(this, CameraSettings.SOURCE_FRONT_BUMPER);
-        CameraState.setVisible(true);
-        DiagnosticsStore.record(this,
-                "AVM preview active; attaching delayed front-camera probe");
-        if (!wasVisible) requestClusterLaunch();
-        sendLocalAction(ACTION_CAMERA_CHANGED);
-    };
 
     private final Runnable clusterLaunchTask = new Runnable() {
         @Override
@@ -78,17 +62,11 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? ACTION_START : intent.getAction();
-        DiagnosticsStore.record(this, "service start action=" + action
-                + " flags=" + flags + " startId=" + startId);
         if (ACTION_SHOW_CLUSTER.equals(action)) {
             requestClusterLaunch();
         } else if (ACTION_HIDE_CLUSTER.equals(action)) {
             cancelClusterLaunch();
-            CameraState.setVisible(false);
-            sendLocalAction(ACTION_CAMERA_CHANGED);
             sendLocalAction(ACTION_HIDE_CLUSTER);
-        } else if (ACTION_CAMERA_SETTINGS_CHANGED.equals(action)) {
-            applyCameraFeatureSetting();
         } else if (intent == null && OverlaySettings.isAutoStartEnabled(this)) {
             requestClusterLaunch();
         }
@@ -98,8 +76,6 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     @Override
     public void onDestroy() {
         cancelClusterLaunch();
-        if (mainHandler != null) mainHandler.removeCallbacks(cameraAttachTask);
-        CameraState.setVisible(false);
         if (client != null) client.stop();
         TelemetryStore.setConnected(false, "Сервис остановлен");
         super.onDestroy();
@@ -121,74 +97,7 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
     @Override
     public void onValue(String key, String value) {
         TelemetryStore.put(key, value);
-        if (TelemetrySignals.SYSTEM_KEY_EVENT.equals(key)) {
-            handleSystemKeyEvent(value);
-        } else if (TelemetrySignals.AVM_PREVIEW_STATUS.equals(key)) {
-            handleAvmPreviewStatus(value);
-        }
         broadcastUpdate();
-    }
-
-    private void handleSystemKeyEvent(String value) {
-        if (value == null) return;
-        String compact = value.replace(" ", "");
-        if (compact.startsWith("[1007,")) {
-            DiagnosticsStore.record(this, "steering camera key=" + value
-                    + "; waiting for AVM preview status");
-        } else if (avmPreviewActive && CameraSettings.isFeatureEnabled(this)) {
-            // GWM consumes these buttons before Android can produce DPAD KeyEvents.
-            // Act on release only, otherwise every press would be handled twice.
-            if ("[1000,1]".equals(compact)) {
-                selectCameraSource(CameraSettings.SOURCE_WINDSHIELD,
-                        "GWM joystick up (1000)");
-            } else if ("[1001,1]".equals(compact)) {
-                selectCameraSource(CameraSettings.SOURCE_REAR,
-                        "GWM joystick down (1001)");
-            } else {
-                DiagnosticsStore.record(this, "steering event while AVM active=" + value);
-            }
-        }
-    }
-
-    private void selectCameraSource(String source, String origin) {
-        boolean wasVisible = CameraState.isVisible();
-        String previous = CameraSettings.getSource(this);
-        if (wasVisible && source.equals(previous)) {
-            DiagnosticsStore.record(this, origin + "; duplicate source ignored=" + source);
-            return;
-        }
-        CameraSettings.setSource(this, source);
-        CameraState.setVisible(true);
-        DiagnosticsStore.record(this, origin + "; source=" + source);
-        if (!wasVisible) requestClusterLaunch();
-        sendLocalAction(ACTION_CAMERA_CHANGED);
-    }
-
-    private void handleAvmPreviewStatus(String value) {
-        boolean active = "1".equals(value == null ? "" : value.trim());
-        avmPreviewActive = active;
-        mainHandler.removeCallbacks(cameraAttachTask);
-        DiagnosticsStore.record(this, "AVM preview status=" + value
-                + " active=" + active);
-        if (active && CameraSettings.isFeatureEnabled(this)) {
-            mainHandler.postDelayed(cameraAttachTask, CAMERA_ATTACH_DELAY_MS);
-        } else {
-            CameraState.setVisible(false);
-            sendLocalAction(ACTION_CAMERA_CHANGED);
-        }
-    }
-
-    private void applyCameraFeatureSetting() {
-        mainHandler.removeCallbacks(cameraAttachTask);
-        boolean enabled = CameraSettings.isFeatureEnabled(this);
-        DiagnosticsStore.record(this, "camera feature enabled=" + enabled
-                + " avmActive=" + avmPreviewActive);
-        if (!enabled) {
-            CameraState.setVisible(false);
-            sendLocalAction(ACTION_CAMERA_CHANGED);
-        } else if (avmPreviewActive) {
-            mainHandler.postDelayed(cameraAttachTask, CAMERA_ATTACH_DELAY_MS);
-        }
     }
 
     private void broadcastUpdate() {
@@ -237,13 +146,9 @@ public final class TelemetryService extends Service implements GwmAdapterClient.
             options.setLaunchDisplayId(target.getDisplayId());
             startActivity(activity, options.toBundle());
             Log.i(TAG, "Cluster activity launched on displayId=" + target.getDisplayId());
-            DiagnosticsStore.record(this,
-                    "cluster launched displayId=" + target.getDisplayId());
             return true;
         } catch (Throwable error) {
             Log.w(TAG, "Cluster is not ready, attempt=" + (clusterLaunchAttempts + 1), error);
-            DiagnosticsStore.record(this, "cluster launch failed attempt="
-                    + (clusterLaunchAttempts + 1) + " error=" + error);
             TelemetryStore.setConnected(TelemetryStore.isConnected(),
                     "Ошибка запуска приборки: " + error.getClass().getSimpleName());
             broadcastUpdate();

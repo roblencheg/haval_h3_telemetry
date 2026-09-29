@@ -16,7 +16,6 @@ public final class BootReceiver extends BroadcastReceiver {
 
         boolean enabled = OverlaySettings.isAutoStartEnabled(context);
         Log.i(TAG, "Received " + action + ", autoStart=" + enabled);
-        DiagnosticsStore.record(context, "boot action=" + action + " autoStart=" + enabled);
         if (!enabled) return;
 
         Intent service = new Intent(context, TelemetryService.class)
