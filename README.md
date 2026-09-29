@@ -39,7 +39,7 @@
 3. Установите или обновите приложение:
 
 ```powershell
-adb install -r .\H3Telemetry-v1.3.0-release.apk
+adb install -r .\H3Telemetry-v1.7.0-release.apk
 ```
 
 4. Запустите приложение:
